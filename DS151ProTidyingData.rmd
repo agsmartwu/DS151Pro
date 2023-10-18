@@ -1,0 +1,144 @@
+---
+title: "ds151proDataCleanUp"
+output: html_document
+date: "2023-10-15"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+```{r}
+library(tidyverse)
+library(knitr)
+```
+# Cleaning up Fossil Fuel Subsidy Data
+```{r}
+fossil_fuel_subsidies <- Fossil_Fuel_Subsidies_2_1_
+head(fossil_fuel_subsidies)
+```
+
+```{r}
+#remove prefix for year cols
+colnames(fossil_fuel_subsidies)[11:21] <- 2015:2025
+
+#force no scientific notation
+options(scipen = 999) 
+```
+
+## tidying fossil fuel subsidy data 
+```{r}
+#filter obs for only percent gdp records, and gather 
+fossil_fuel_tidy <- fossil_fuel_subsidies %>%
+  filter(Unit == "Percent of GDP") %>%
+  gather(year, fossil_sub, colnames(fossil_fuel_subsidies)[11:21]) %>%
+  dplyr::select(-Unit,-Source,-CTS_Full_Descriptor,-Indicator, -ISO3,-ISO2,-CTS_Code)
+View(fossil_fuel_tidy)
+```
+
+## look at fossil fuel subsidies in total by country --> no catagories 
+```{r}
+#filter to only see total subsidies implicit + explicit, as % GDP
+fossil_fuel_totals_by_year <- fossil_fuel_tidy %>%
+  filter(CTS_Name == "Total Implicit and Explicit") %>%
+  dplyr::select(-CTS_Name,-ObjectId)
+View(fossil_fuel_totals_by_year)
+```
+
+looking at totals for Pakistan 
+```{r}
+# visualize 1 countires total subsidies
+
+# filter by country
+fossil_fuel_subsidies_Pakistan <- fossil_fuel_totals_by_year %>% 
+  filter(Country == "Pakistan")
+
+#plot
+ggplot(data=fossil_fuel_subsidies_Pakistan, aes(x=year, y=fossil_sub)) +
+  geom_point()
+
+```
+
+looking at total subsides by year per country
+```{r echo=FALSE}
+# visualize all countries 
+ggplot(data=fossil_fuel_totals_by_year, aes(x=year, y=percent_gdp, color=Country)) +
+  geom_jitter(alpha=0.5, size=0.5) +
+  theme(legend.position = "none")
+```
+
+looking at some outliars 
+```{r}
+outliars <- fossil_fuel_totals_by_year %>% 
+  filter(percent_gdp > 50) %>%
+  select(year, Country, percent_gdp)
+outliars
+```
+
+# tidying enviromental spending data 
+```{r}
+# removing prefix from years
+colnames(env_spending)[11:38] <- 1995:2022
+
+env_spending_tidy <- env_spending %>% 
+  filter(Unit=="Percent of GDP") %>%
+  dplyr::select(-ObjectId,-ISO3,-ISO2,-Source,-CTS_Full_Descriptor,-CTS_Code,-Indicator,-Unit) %>%
+  gather(year, env_spend, colnames(env_spending)[11:38],na.rm=TRUE) %>%
+  filter(year>=2015) #only care abt time shaerd w fossil fuel subsidies 
+
+View(env_spending_tidy)
+```
+
+looking at env spending for germany in 2020
+```{r}
+germ_env_spending2020 <- env_spending_tidy %>% filter(Country=="Germany",year==2020)
+germ_env_spending2020
+
+is_this_total <- germ_env_spending2020 %>% filter(CTS_Name=="Environmental Protection Expenditures")
+is_this_total
+
+total_others <- germ_env_spending2020 %>% filter(CTS_Name!="Environmental Protection Expenditures") %>%
+  summarise(sum(percent_gdp))
+total_others
+is_this_total
+
+#### so CTS_Name=="Environmental Protection Expenditures" is totals
+
+```
+
+
+```{r}
+env_spending_totals <- env_spending_tidy %>% 
+  filter(CTS_Name=="Environmental Protection Expenditures")
+
+env_spending_totals
+```
+
+# joining 2 sets 
+```{r}
+
+totals_env_spending_and_fossil_fuel_subsidies <- inner_join(env_spending_totals,fossil_fuel_totals_by_year, join_by(year,Country))
+View(totals_env_spending_and_fossil_fuel_subsidies)
+```
+
+# using conjoined set
+```{r}
+uk_spending <- totals_env_spending_and_fossil_fuel_subsidies %>%
+  filter(Country == "United Kingdom")
+uk_spending
+
+ggplot(data=uk_spending, aes(x=year, y=env_spend-fossil_sub)) +
+  geom_point()
+```
+
+
+```{r}
+#join tidy sets
+#NOTE: might be annoying to work with
+env_fossil_tidy <- inner_join(env_spending_tidy, fossil_fuel_tidy, join_by(Country,year))
+View(env_fossil_tidy)
+```
+
+
+
